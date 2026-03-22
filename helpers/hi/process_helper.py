@@ -28,8 +28,8 @@ def process_latin_script(lines: list[str]) -> tuple[list[dict], dict]:
     lyrics_text = " ".join(lines)
     formatted_words = hinglish_to_devanagari(lyrics_text)
 
-    # refined_words = LLMService().refine_hinglish(formatted_words)
-    refined_words = formatted_words  # bypassing LLM for debuging
+    refined_words = LLMService().refine_hinglish(formatted_words)
+    # refined_words = formatted_words  # bypassing LLM for debuging
 
     # key = devanagari, value = latin
     word_mapp = {}

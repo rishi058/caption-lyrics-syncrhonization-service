@@ -4,7 +4,7 @@ url = "http://localhost:5001/sync-lyrics"
 
 if __name__ == "__main__":
 
-    with open("lyrics1.txt", "r", encoding="utf-8") as f:
+    with open("lyrics.txt", "r", encoding="utf-8") as f:
         lyrics = f.read()
 
     body = {

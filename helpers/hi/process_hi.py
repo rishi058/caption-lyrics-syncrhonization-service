@@ -11,12 +11,13 @@ Flow:
 """
 
 import whisperx
+import time
 from helpers.config import COMPUTE_TYPE, DEVICE, MODEL_NAME, ALIGN_MODEL_HI, SAMPLE_RATE
 from helpers.hi.transliteration import is_devanagari
 from helpers.utils import clean_for_alignment
 from helpers.hi.process_helper import process_devanagari_script, process_latin_script
 from helpers.hi.english_gap_filler import fill_english_gaps
-
+from helpers.silero_vad import _detect_vocal_bounds
 
 def process_hindi_language(lyrics: str, devanagari_output: bool, audio) -> list[dict]:
     """Returns sync data for Hindi/Hinglish language."""
@@ -36,7 +37,6 @@ def process_hindi_language(lyrics: str, devanagari_output: bool, audio) -> list[
         segments = _transcribe_with_whisperx(audio)
         if not segments:
             raise RuntimeError("Hindi transcription failed: no segments returned.")
-        # Combine all segment texts into one string
         full_text = " ".join(seg["text"] for seg in segments)
         lines = [clean_for_alignment(line, "devanagari") for line in full_text.splitlines() if line.strip()]
         mixed_words, word_mapp = process_devanagari_script(lines)
@@ -49,10 +49,14 @@ def process_hindi_language(lyrics: str, devanagari_output: bool, audio) -> list[
     if not hindi_text.strip():
         raise RuntimeError("No Hindi words found in lyrics after processing.")
 
-    hindi_segments = [{"text": hindi_text, "start": 0, "end": audio_duration}]
+    # ── Step 2: Detect vocal bounds in a SINGLE VAD pass ────────────────────
+    vocal_start, vocal_end = _detect_vocal_bounds(audio, audio_duration)
 
-    # ── Step 2: Align Hindi words ────────────────────────────────────────────
+    hindi_segments = [{"text": hindi_text, "start": vocal_start, "end": vocal_end}]
+
+    # ── Step 3: Align Hindi words ────────────────────────────────────────────
     try:
+        print(f"[{time.strftime('%X')}] Aligning Hindi words...")
         model_a, metadata = whisperx.load_align_model(
             language_code="hi", device=DEVICE, model_name=ALIGN_MODEL_HI
         )
@@ -64,22 +68,23 @@ def process_hindi_language(lyrics: str, devanagari_output: bool, audio) -> list[
     if not hindi_aligned_words:
         raise RuntimeError("Hindi alignment produced no word-level timestamps.")
 
-    # ── Step 3: Fill English words into gaps ──────────────────────────────────
+    # ── Step 4: Fill English words into gaps ─────────────────────────────────
     en_aligned_words = fill_english_gaps(
         hindi_aligned_words=hindi_aligned_words,
         mixed_words=mixed_words,
         audio=audio,
         audio_duration=audio_duration,
+        vocal_start=vocal_start,
+        vocal_end=vocal_end,
     )
 
-    # ── Step 4: Merge both and sort by timestamp ─────────────────────────────
-    merged = _merge_and_tag(hindi_aligned_words, en_aligned_words, mixed_words, word_mapp)
+    # ── Step 5: Merge both and preserve original word order ───────────────────
+    merged = _merge_and_tag(hindi_aligned_words, en_aligned_words, mixed_words)
 
-    # ── Step 5: Output format ────────────────────────────────────────────────
+    # ── Step 6: Output format ─────────────────────────────────────────────────
     if devanagari_output:
         return merged
     else:
-        # Convert Hindi words back to Latin/Hinglish
         for item in merged:
             if item.get("lang") == "hi" and item["word"] in word_mapp:
                 item["word"] = word_mapp[item["word"]]
@@ -95,46 +100,69 @@ def _build_hindi_text(mixed_words: list[dict]) -> str:
     parts = [w["dev"] for w in mixed_words if w["lang"] == "hi"]
     return " ".join(parts)
 
-
 def _merge_and_tag(
     hindi_words: list[dict],
     english_words: list[dict],
     mixed_words: list[dict],
-    word_mapp: dict,
 ) -> list[dict]:
     """
-    Merge Hindi and English aligned words into a single sorted list.
-    Each entry has: word, start, end, score, lang.
-    
-    - 'word' uses the Devanagari form for Hindi words (for devanagari_output=True).
-    - Output uses 'text' key for downstream compatibility with format_sync_data.
+    Merge Hindi and English aligned words into a single list that preserves
+    the original word order from *mixed_words*.
+
+    Instead of sorting by timestamp (which breaks when alignment produces
+    identical or zero times), we walk *mixed_words* sequentially and consume
+    the next aligned word from the appropriate queue (Hindi or English).
+
+    Each output entry has keys: text, word, start, end, score, lang.
     """
-    result = []
+    result: list[dict] = []
 
-    for w in hindi_words:
-        result.append({
-            "text":  w.get("word", ""),
-            "word":  w.get("word", ""),
-            "start": w.get("start", 0.0),
-            "end":   w.get("end", 0.0),
-            "score": w.get("score", 0.0),
-            "lang":  "hi",
-        })
+    hi_iter = iter(hindi_words)
+    en_iter = iter(english_words)
 
-    for w in english_words:
-        result.append({
-            "text":  w.get("word", ""),
-            "word":  w.get("word", ""),
-            "start": w.get("start", 0.0),
-            "end":   w.get("end", 0.0),
-            "score": w.get("score", 0.0),
-            "lang":  "en",
-        })
+    for m in mixed_words:
+        if m["lang"] == "hi":
+            w = next(hi_iter, None)
+            if w is None:
+                result.append({
+                    "text":  m["dev"],
+                    "word":  m["dev"],
+                    "start": 0.0,
+                    "end":   0.0,
+                    "score": 0.0,
+                    "lang":  "hi",
+                })
+                continue
+            result.append({
+                "text":  w.get("word", m["dev"]),
+                "word":  w.get("word", m["dev"]),
+                "start": w.get("start", 0.0),
+                "end":   w.get("end", 0.0),
+                "score": w.get("score", 0.0),
+                "lang":  "hi",
+            })
+        else:  # English
+            w = next(en_iter, None)
+            if w is None:
+                result.append({
+                    "text":  m["lat"],
+                    "word":  m["lat"],
+                    "start": 0.0,
+                    "end":   0.0,
+                    "score": 0.0,
+                    "lang":  "en",
+                })
+                continue
+            result.append({
+                "text":  w.get("word", m["lat"]),
+                "word":  w.get("word", m["lat"]),
+                "start": w.get("start", 0.0),
+                "end":   w.get("end", 0.0),
+                "score": w.get("score", 0.0),
+                "lang":  "en",
+            })
 
-    # Sort by start time; stable sort preserves order for equal timestamps
-    result.sort(key=lambda x: x["start"])
     return result
-
 
 def _transcribe_with_whisperx(audio) -> list[dict]:
     """Transcribes audio using WhisperX in Hindi mode."""

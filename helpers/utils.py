@@ -66,27 +66,33 @@ def format_sync_data(sync_data: list[dict], audio_duration: float) -> list[dict]
              "timestampMs": 0, "confidence": 1}
         ]
 
+    fresh_data = []
+
     for item in sync_data:
-        item["text"] = " " + item.get("text", item.get("word", ""))
-        item["startMs"] = int(item.get("start", 0) * 1000)  
-        item["endMs"]   = int(item.get("end", 0) * 1000) 
-        item["timestampMs"] = item["startMs"] 
-        item["confidence"] = round(item.get("score", 0.0), 6)
+        # Create a fresh dictionary to ensure only desired fields are included
+        temp = {}
+        temp["text"] = " " + item.get("text", item.get("word", ""))
+        temp["startMs"] = int(item.get("start", 0) * 1000)  
+        temp["endMs"]   = int(item.get("end", 0) * 1000) 
+        temp["timestampMs"] = temp["startMs"] 
+        temp["confidence"] = round(item.get("score", 0.0), 6)
+
+        fresh_data.append(temp) 
 
     
-    sync_data.insert(0, {
+    fresh_data.insert(0, {
         "text": " ", "startMs": 0,
-        "endMs": max(0, sync_data[0]["startMs"] - 1),
+        "endMs": max(0, fresh_data[0]["startMs"] - 1),
         "timestampMs": 0, "confidence": 1,
     })
 
-    sync_data.append({
-        "text": " ", "startMs": sync_data[-1]["endMs"] + 1,
+    fresh_data.append({
+        "text": " ", "startMs": fresh_data[-1]["endMs"] + 1,
         "endMs": int(audio_duration * 1000),
-        "timestampMs": sync_data[-1]["endMs"] + 1, "confidence": 1,
+        "timestampMs": fresh_data[-1]["endMs"] + 1, "confidence": 1,
     })
 
-    return sync_data
+    return fresh_data 
 
 def save_sync_data(sync_data: list[dict], media_path: str, output_dir: str) -> str:
     """
