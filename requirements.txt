@@ -1,0 +1,25 @@
+# winget install Python.Python.3.11
+# py -3.11 -m venv .venv
+# .venv\Scripts\activate
+# pip install -r requirements.txt
+
+# When using CUDA, total .venv size: 8GB
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.8.0
+torchvision==0.23.0
+torchaudio==2.8.0
+whisperx==3.7.6
+pytorch-lightning==2.5.5
+pyannote.audio
+
+# When using CPU only, total .venv size: 2.5GB
+# whisperx
+
+huggingface_hub[hf_xet]
+indic_transliteration
+wordfreq
+fastapi
+uvicorn
+demucs
+langchain_cohere
+langchain_core

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env
+.logs/
+*.log
+
+# Project specific
+htdemucs/
+*.mp3
+*.mp4
+*.json
+*.wav
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# custom
+lyrics.txt
