@@ -12,9 +12,7 @@ if __name__ == "__main__":
         "output_path": "D:\\STUDY 2\\MediaEditor\\01\\test\\lyrics_json\\",
         "language": "en",
         "lyrics": "",
-        "force_alignment": False,
         "devanagari_output": False,
-        "isolate_vocals": True 
     }
 
     print("Sending request to the server...")

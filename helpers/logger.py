@@ -2,7 +2,7 @@ import os
 import time
 
 class CustomLogger:
-    log_file = "llm_calls.log"
+    log_file = "debug.log"
     log_file_path = os.path.join(os.getcwd(), log_file)
 
     @staticmethod

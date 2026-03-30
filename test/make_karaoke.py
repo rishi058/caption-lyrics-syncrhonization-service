@@ -38,4 +38,4 @@ def make_karaoke(media, json_file, out_file):
     subprocess.run(cmd)
 
 if __name__ == "__main__":
-    make_karaoke('C:\\Users\\Rishi\\Downloads\\Die_For_You.mp4', 'lyrics_json\\Die_For_You.json', 'media_output\\die_for_you_3.mp4')
+    make_karaoke('C:\\Users\\Rishi\\Downloads\\Die_For_You.mp4', 'lyrics_json\\Die_For_You.json', 'media\\die_for_you_2.mp4')

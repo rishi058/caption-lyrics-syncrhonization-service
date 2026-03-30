@@ -25,5 +25,8 @@ htdemucs/
 Thumbs.db
 
 # custom
-lyrics.txt
+lyrics_json
+lyrics_text
+media
 .ass
+cache
